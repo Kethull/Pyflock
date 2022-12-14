@@ -16,11 +16,26 @@ class Boid:
         self.isBirdZero = False
 
     def update(self, deltaTime):
-        self.velocity = self.velocity + self.acceleration * deltaTime
-        if self.velocity.length() > self.maxSpeed:
-            self.velocity = self.velocity.normalize() * self.maxSpeed
-        self.position = self.position + self.velocity * deltaTime
-        self.acceleration = Vector2(0, 0)
+        # Acceleration changes velocity
+        self.velocity.add(self.acceleration * deltaTime)
+
+        # Limit velocity
+        if self.velocity.magnitude_squared > self.maxSpeed * self.maxspeed:
+            self.velocity.magnitude = self.maxSpeed
+
+        # Velocity changes position
+        self.position += self.velocity * deltaTime
+
+        # wrap boids around screen
+        if self.position.x > self.screenWidth:
+            self.position.x = 0
+        elif self.position.x < 0:
+            self.position.x = self.screenWidth
+
+        if self.position.y > self.screenHeight:
+            self.position.y = 0
+        elif self.position.y < 0:
+            self.position.y = self.screenHeight
 
     def calculateAcceleration(self, boids):
         alignment = self.align(boids)
