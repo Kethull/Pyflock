@@ -6,7 +6,7 @@ from pygame import draw
 
 
 class Boid:
-    # TODO: go through all setMag methods and change to magnitude.set
+    # TODO: go through all vector methods change to pygame equivalents
     # TODO: pass in all global vars as parameters
 
     def __init__(self, _position):
@@ -43,8 +43,9 @@ class Boid:
     def calculateAcceleration(self, grid):
         self.acceleration = Vector2(0, 0)
 
+        # TODO: move to avoidObstacle function and make sure it works.
         # avoid obstacles
-        for obstacle in self.obstacles:
+        for obstacle in obstacles:
             vectorToObstacle = obstacle.position - self.position
             squareDistanceToObstacle = vectorToObstacle.magnitude_squared()
             if squareDistanceToObstacle < obstacleSize * obstacleSize:
@@ -54,15 +55,11 @@ class Boid:
 
         # TODO: refactor each of the below functions to use the grid
 
-        alignment = self.align(grid)
-        cohesion = self.cohere(grid)
+        self.align(grid)
+        # TODO: redo cohere from scratch
+        #cohesion = self.cohere(grid)
         separation = self.separate(grid)
         avoidance = self.avoid()
-
-        self.acceleration += alignment
-        self.acceleration += cohesion
-        self.acceleration += separation
-        self.acceleration += avoidance
 
     def align(self, grid):
         self.alignmentForce = Vector2(0, 0)
@@ -107,23 +104,23 @@ class Boid:
             steering = steering.limit(self.maxForce)
         return steering
 
-    def separate(self, boids):
-        steering = Vector2(0, 0)
-        total = 0
-        for boid in boids:
-            if boid != self:
-                distance = self.position.distance_to(boid.position)
-                if distance > 0 and distance < 25:
-                    diff = self.position - boid.position
-                    diff = diff.normalize() / distance
-                    steering += diff
-                    total += 1
-        if total > 0:
-            steering /= total
-            steering = steering.normalize() * maxSpeed
-            steering -= self.velocity
-            steering = steering.limit(self.maxForce)
-        return steering
+    def separate(self, grid):
+        self.separationForce.set(0, 0)
+        for otherBird in grid.query(self.position.x, self.position.y, BIRD_SEPARATION_RADIUS):
+            if otherBird == self:
+                continue   # Don't compare a bird with itself!
+
+            vectorToOtherBird = otherBird.position  # PVector.sub(otherBird.position, self.position)
+            squareDistanceToOtherBird = vectorToOtherBird.magSq()
+
+            # Ignore if too far away
+            if squareDistanceToOtherBird > BIRD_SEPARATION_RADIUS*BIRD_SEPARATION_RADIUS:
+                continue
+
+            # Repel from other bird!
+            self.separationForce.add(vectorToOtherBird.setMag(-BIRD_SEPARATION_STRENGTH))
+
+        self.acceleration.add(self.separationForce)
 
     def avoid(self):
         steering = Vector2(0, 0)
