@@ -22,10 +22,6 @@ class SpatialGrid:
 
         self.grid[gridX][gridY].append(boid)
 
-    def addBoids(self, boids):
-        for boid in boids:
-            self.add(boid.position.x, boid.position.y, boid)
-
     def getCell(self, x, y):
         gridX = int(x // self.cellSize)
         gridY = int(y // self.cellSize)

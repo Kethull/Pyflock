@@ -49,6 +49,11 @@ while True:
     for obstacle in obstacleList:
         draw.circle(screen, (255, 255, 255), obstacle, obstacleSize)
 
+    for boid in boidList
+    boid.calculateAcceleration(grid)
+
+    -------------------------------------------------
+
     screen.fill((0, 0, 0))
 
     for boid in boidList:
