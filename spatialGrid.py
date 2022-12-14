@@ -21,7 +21,7 @@ class SpatialGrid:
             return
 
         self.grid[gridX][gridY].append(boid)
-        
+
     def addBoids(self, boids):
         for boid in boids:
             self.add(boid.position.x, boid.position.y, boid)
@@ -52,19 +52,20 @@ class SpatialGrid:
                         results.append(boid)
 
         return results
-    
+
     def draw(self, screen):
         for i in range(0, self.gridWidth):
             for j in range(0, self.gridHeight):
                 x = i * self.cellSize
                 y = j * self.cellSize
-                #change this to a white rectangle
-                draw.rect(screen, (255, 255, 255), (x, y, self.cellSize, self.cellSize), 1)
+                # change this to a white rectangle
+                draw.rect(screen, (255, 255, 255),
+                          (x, y, self.cellSize, self.cellSize), 1)
 
     def debugDraw(self, screen):
         for i in range(0, self.gridWidth):
             for j in range(0, self.gridHeight):
                 x = i * self.cellSize
                 y = j * self.cellSize
-                draw.rect(screen, (0, 0, 0), (x, y, self.cellSize, self.cellSize), 1)
-                
+                draw.rect(screen, (0, 0, 0),
+                          (x, y, self.cellSize, self.cellSize), 1)

@@ -1,16 +1,19 @@
-#fix errors
+# fix errors
 import numpy as np
 from pygame.math import Vector2
 from pygame import draw
 
 
 class Boid:
-    def __init__(self, position, velocity, acceleration, maxSpeed, maxForce):
-        self.position = position
-        self.velocity = velocity
-        self.acceleration = acceleration
-        self.maxSpeed = maxSpeed
-        self.maxForce = maxForce
+    # create Vector2 for position, velocity, acceleration
+
+    def __init__(self, _position):
+        self.position = _position
+        self.velocity = Vector2(0, 0)
+        self.acceleration = Vector2(0, 0)
+        self.separationForce = Vector2(0, 0)
+        self.alignmentForce = Vector2(0, 0)
+        self.isBirdZero = False
 
     def update(self, deltaTime):
         self.velocity = self.velocity + self.acceleration * deltaTime
@@ -67,7 +70,7 @@ class Boid:
             steering -= self.velocity
             steering = steering.limit(self.maxForce)
         return steering
-    #no references found for this function
+
     def separate(self, boids):
         steering = Vector2(0, 0)
         total = 0
@@ -102,9 +105,7 @@ class Boid:
             steering -= self.velocity
             steering = steering.limit(self.maxForce)
         return steering
-    
-    def addForce(self, force):
-        self.acceleration += force
+
     def drawBoid(self, screen):
-        draw.circle(screen, (255, 255, 255), (int(self.position.x), int(self.position.y)), 5)
-            
+        draw.circle(screen, (255, 255, 255),
+                    (int(self.position.x), int(self.position.y)), 5)
