@@ -1,119 +1,205 @@
-import pygame
-from pygame.math import Vector2
-from pygame import draw
-from boid import Boid
-from spatialGrid import SpatialGrid
-import random
+#!/usr/bin/env python3
+from math import pi, sin, cos, atan2, radians, degrees
+from random import randint
+import pygame as pg
 
-boidList = []
-obstacleList = []
-grid = SpatialGrid(100)
-mouseFollowStrength = 250
-seperationRadius = 65
-seperationStrength = 400
-alignmentRadius = 20
-alignmentStrength = 200
-obstacleSize = 250
-obstacleAvoidStrength = 3000
+'''
+PyNBoids - a Boids simulation - github.com/Nikorasu/PyNBoids
+This version uses a spatial partitioning grid to improve performance.
+Copyright (c) 2021  Nikolaus Stromberg  nikorasu85@gmail.com
+'''
+FLLSCRN = False          # True for Fullscreen, or False for Window
+BOIDZ = 200             # How many boids to spawn, too many may slow fps
+WRAP = False            # False avoids edges, True wraps to other side
+FISH = False            # True to turn boids into fish
+SPEED = 150             # Movement speed
+WIDTH = 1200            # Window Width (1200)
+HEIGHT = 800            # Window Height (800)
+BGCOLOR = (0, 0, 0)     # Background color in RGB
+FPS = 60                # 30-90
+SHOWFPS = False         # frame rate debug
 
-for i in range(1000):
-    boidList.append(Boid(Vector2(random.randint(0, 1800), random.randint(0, 900)), Vector2(0, 0), Vector2(0, 0), 200, 200))
-grid.addBoids(boidList)
 
-obstacleList.append(Vector2(random.randint(0, 1800), random.randint(0, 900)))
+class Boid(pg.sprite.Sprite):
 
-pygame.init()
-screen = pygame.display.set_mode((1800, 900))
-clock = pygame.time.Clock()
+    def __init__(self, grid, drawSurf, isFish=False):  # , cHSV=None
+        super().__init__()
+        self.grid = grid
+        self.drawSurf = drawSurf
+        self.image = pg.Surface((15, 15)).convert()
+        self.image.set_colorkey(0)
+        self.color = pg.Color(0)  # preps color so we can use hsva
+        self.color.hsva = (randint(0, 360), 90, 90)  # if cHSV is None else cHSV # randint(5,55) #4goldfish
+        if isFish:  # (randint(120,300) + 180) % 360  #4noblues
+            pg.draw.polygon(self.image, self.color, ((7, 0), (12, 5), (3, 14), (11, 14), (2, 5), (7, 0)), width=3)
+            self.image = pg.transform.scale(self.image, (16, 24))
+        else:
+            pg.draw.polygon(self.image, self.color, ((7, 0), (13, 14), (7, 11), (1, 14), (7, 0)))
+        self.bSize = 22 if isFish else 17
+        self.orig_image = pg.transform.rotate(self.image.copy(), -90)
+        self.dir = pg.Vector2(1, 0)  # sets up forward direction
+        maxW, maxH = self.drawSurf.get_size()
+        self.rect = self.image.get_rect(center=(randint(50, maxW - 50), randint(50, maxH - 50)))
+        self.ang = randint(0, 360)  # random start angle, & position ^
+        self.pos = pg.Vector2(self.rect.center)
+        self.grid_lastpos = self.grid.getcell(self.pos)
+        self.grid.add(self, self.grid_lastpos)
 
-while True:
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            pygame.quit()
-            quit()
+    def update(self, dt, speed, ejWrap=False):
+        maxW, maxH = self.drawSurf.get_size()
+        selfCenter = pg.Vector2(self.rect.center)
+        turnDir = xvt = yvt = yat = xat = 0
+        turnRate = 120 * dt  # about 120 seems ok
+        margin = 42
+        self.ang = self.ang + randint(-4, 4)
+        # Grid update stuff
+        self.grid_pos = self.grid.getcell(self.pos)
+        if self.grid_pos != self.grid_lastpos:
+            self.grid.add(self, self.grid_pos)
+            self.grid.remove(self, self.grid_lastpos)
+            self.grid_lastpos = self.grid_pos
+        # get nearby boids and sort by distance
+        near_boids = self.grid.getnear(self, self.grid_pos)
+        neiboids = sorted(near_boids, key=lambda i: pg.Vector2(i.rect.center).distance_to(selfCenter))
+        del neiboids[7:]  # keep 7 closest, dump the rest
+        # check when boid has neighborS (also sets ncount with walrus :=)
+        if (ncount := len(neiboids)) > 1:
+            nearestBoid = pg.Vector2(neiboids[0].rect.center)
+            for nBoid in neiboids:  # adds up neighbor vectors & angles for averaging
+                xvt += nBoid.rect.centerx
+                yvt += nBoid.rect.centery
+                yat += sin(radians(nBoid.ang))
+                xat += cos(radians(nBoid.ang))
+            tAvejAng = degrees(atan2(yat, xat))
+            targetV = (xvt / ncount, yvt / ncount)
+            # if too close, move away from closest neighbor
+            if selfCenter.distance_to(nearestBoid) < self.bSize:
+                targetV = nearestBoid
+            tDiff = targetV - selfCenter  # get angle differences for steering
+            tDistance, tAngle = pg.math.Vector2.as_polar(tDiff)
+            # if boid is close enough to neighbors, match their average angle
+            if tDistance < self.bSize*5:
+                tAngle = tAvejAng
+            # computes the difference to reach target angle, for smooth steering
+            angleDiff = (tAngle - self.ang) + 180
+            if abs(tAngle - self.ang) > .5:
+                turnDir = (angleDiff / 360 - (angleDiff // 360)) * 360 - 180
+            # if boid gets too close to target, steer away
+            if tDistance < self.bSize and targetV == nearestBoid:
+                turnDir = -turnDir
+        # Avoid edges of screen by turning toward the edge normal-angle
+        sc_x, sc_y = self.rect.centerx, self.rect.centery
+        if not ejWrap and min(sc_x, sc_y, maxW - sc_x, maxH - sc_y) < margin:
+            if sc_x < margin:
+                tAngle = 0
+            elif sc_x > maxW - margin:
+                tAngle = 180
+            if sc_y < margin:
+                tAngle = 90
+            elif sc_y > maxH - margin:
+                tAngle = 270
+            angleDiff = (tAngle - self.ang) + 180  # increase turnRate to keep boids on screen
+            turnDir = (angleDiff / 360 - (angleDiff // 360)) * 360 - 180
+            edgeDist = min(sc_x, sc_y, maxW - sc_x, maxH - sc_y)
+            turnRate = turnRate + (1 - edgeDist / margin) * (20 - turnRate)  # turnRate=minRate, 20=maxRate
+        if turnDir != 0:  # steers based on turnDir, handles left or right
+            self.ang += turnRate * abs(turnDir) / turnDir
+        self.ang %= 360  # ensures that the angle stays within 0-360
+        # Adjusts angle of boid image to match heading
+        self.image = pg.transform.rotate(self.orig_image, -self.ang)
+        self.rect = self.image.get_rect(center=self.rect.center)  # recentering fix
+        self.dir = pg.Vector2(1, 0).rotate(self.ang).normalize()
+        self.pos += self.dir * dt * (speed + (7 - ncount) * 5)  # movement speed
+        # Optional screen wrap
+        if ejWrap and not self.drawSurf.get_rect().contains(self.rect):
+            if self.rect.bottom < 0:
+                self.pos.y = maxH
+            elif self.rect.top > maxH:
+                self.pos.y = 0
+            if self.rect.right < 0:
+                self.pos.x = maxW
+            elif self.rect.left > maxW:
+                self.pos.x = 0
+        # Actually update position of boid
+        self.rect.center = self.pos
 
-    deltaTime = clock.tick(60) / 1000.0
 
-    for boid in boidList:
-        boid.update(deltaTime)
+class BoidGrid():  # tracks boids in spatial partition grid
 
-    grid.empty()
-    grid.addBoids(boidList)
+    def __init__(self):
+        self.grid_size = 100
+        self.dict = {}
+    # finds the grid cell corresponding to given pos
 
-    screen.fill((0, 0, 0))
+    def getcell(self, pos):
+        return (pos[0]//self.grid_size, pos[1]//self.grid_size)
+    # boids add themselves to cells when crossing into new cell
 
-    for boid in boidList:
-        boid.drawBoid(screen)
+    def add(self, boid, key):
+        if key in self.dict:
+            self.dict[key].append(boid)
+        else:
+            self.dict[key] = [boid]
+    # they also remove themselves from the previous cell
 
-    for obstacle in obstacleList:
-        draw.circle(screen, (255, 255, 255), obstacle, obstacleSize)
+    def remove(self, boid, key):
+        if key in self.dict and boid in self.dict[key]:
+            self.dict[key].remove(boid)
+    # Returns a list of nearby boids within all surrounding 9 cells
 
-    #Calculate forces on boids
-    for boid in boidList:
-        #Seperation
-        seperationForce = Vector2(0, 0)
-        seperationCount = 0
-        for otherBoid in grid.query(boid.position.x, boid.position.y, seperationRadius):
-            if otherBoid != boid:
-                distance = boid.position.distance_to(otherBoid.position)
-                if distance < seperationRadius:
-                    seperationForce += (boid.position - otherBoid.position).normalize() / distance
-                    seperationCount += 1
+    def getnear(self, boid, key):
+        if key in self.dict:
+            nearby = []
+            for x in (-1, 0, 1):
+                for y in (-1, 0, 1):
+                    nearby += self.dict.get((key[0] + x, key[1] + y), [])
+            nearby.remove(boid)
+        return nearby
 
-        if seperationCount > 0:
-            seperationForce /= seperationCount
-            seperationForce = seperationForce.normalize() * seperationStrength
 
-        boid.addForce(seperationForce)
+def main():
+    pg.init()  # prepare window
+    pg.display.set_caption("PyNBoids")
+    try:
+        pg.display.set_icon(pg.image.load("nboids.png"))
+    except:
+        print("Note: nboids.png icon not found, skipping..")
+    # setup fullscreen or window mode
+    if FLLSCRN:
+        currentRez = (pg.display.Info().current_w, pg.display.Info().current_h)
+        screen = pg.display.set_mode(currentRez, pg.SCALED | pg.NOFRAME | pg.FULLSCREEN, vsync=1)
+        pg.mouse.set_visible(False)
+    else:
+        screen = pg.display.set_mode((WIDTH, HEIGHT), pg.RESIZABLE | pg.SCALED, vsync=1)
 
-        #Alignment
-        alignmentForce = Vector2(0, 0)
-        alignmentCount = 0
-        for otherBoid in grid.query(boid.position.x, boid.position.y, alignmentRadius):
-            if otherBoid != boid:
-                distance = boid.position.distance_to(otherBoid.position)
-                if distance < alignmentRadius:
-                    alignmentForce += otherBoid.velocity
-                    alignmentCount += 1
+    boidTracker = BoidGrid()
+    nBoids = pg.sprite.Group()
+    # spawns desired # of boidz
+    for n in range(BOIDZ):
+        nBoids.add(Boid(boidTracker, screen, FISH))
 
-        if alignmentCount > 0:
-            alignmentForce /= alignmentCount
-            alignmentForce = alignmentForce.normalize() * alignmentStrength
+    if SHOWFPS:
+        font = pg.font.Font(None, 30)
+    clock = pg.time.Clock()
 
-        boid.addForce(alignmentForce)
+    # main loop
+    while True:
+        for e in pg.event.get():
+            if e.type == pg.QUIT or e.type == pg.KEYDOWN and (e.key == pg.K_ESCAPE or e.key == pg.K_q or e.key == pg.K_SPACE):
+                return
 
-        #Mouse follow
-        mouseFollowForce = Vector2(pygame.mouse.get_pos()) - boid.position
-        mouseFollowForce = mouseFollowForce.normalize() * mouseFollowStrength
+        dt = clock.tick(FPS) / 1000
+        screen.fill(BGCOLOR)
+        # update boid logic, then draw them
+        nBoids.update(dt, SPEED, WRAP)
+        nBoids.draw(screen)
+        # if true, displays the fps in the upper left corner, for debugging
+        if SHOWFPS:
+            screen.blit(font.render(str(int(clock.get_fps())), True, [0, 200, 0]), (8, 8))
 
-        boid.addForce(mouseFollowForce)
+        pg.display.update()
 
-        #Obstacle avoidance
-        obstacleAvoidForce = Vector2(0, 0)
-        obstacleAvoidCount = 0
-        for obstacle in obstacleList:
-            distance = boid.position.distance_to(obstacle)
-            if distance < obstacleSize:
-                obstacleAvoidForce += (boid.position - obstacle).normalize() / distance
-                obstacleAvoidCount += 1
 
-        if obstacleAvoidCount > 0:
-            obstacleAvoidForce /= obstacleAvoidCount
-            obstacleAvoidForce = obstacleAvoidForce.normalize() * obstacleAvoidStrength
-
-        boid.addForce(obstacleAvoidForce)
-        
-    #Update + draw every bird
-    for boid in boidList:
-        boid.update(deltaTime)
-        boid.drawBoid(screen)
-
-    draw.circle(screen, (255, 0, 0), pygame.mouse.get_pos(), 10)
-
-    draw.circle(screen, (255, 255, 255), (0, 0), 50)
-    draw.circle(screen, (255, 255, 255), (0, 0), 100)
-    draw.circle(screen, (255, 255, 255), (0, 0), 150)
-    draw.circle(screen, (255, 255, 255), (0, 0), 200)
-
-    pygame.display.flip()
-    
+if __name__ == '__main__':
+    main()  # by Nik
+    pg.quit()
