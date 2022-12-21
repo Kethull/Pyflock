@@ -30,7 +30,6 @@ cap = cv2.VideoCapture(0)
 mphands = mp.solutions.hands
 
 
-
 class Boid(pg.sprite.Sprite):
 
     def __init__(self, grid, drawSurf, isFish=False):  # , cHSV=None
@@ -40,17 +39,21 @@ class Boid(pg.sprite.Sprite):
         self.image = pg.Surface((15, 15)).convert()
         self.image.set_colorkey(0)
         self.color = pg.Color(0)  # preps color so we can use hsva
-        self.color.hsva = (randint(0, 360), 90, 90)  # if cHSV is None else cHSV # randint(5,55) #4goldfish
+        # if cHSV is None else cHSV # randint(5,55) #4goldfish
+        self.color.hsva = (randint(0, 360), 90, 90)
         if isFish:  # (randint(120,300) + 180) % 360  #4noblues
-            pg.draw.polygon(self.image, self.color, ((7, 0), (12, 5), (3, 14), (11, 14), (2, 5), (7, 0)), width=3)
+            pg.draw.polygon(self.image, self.color, ((
+                7, 0), (12, 5), (3, 14), (11, 14), (2, 5), (7, 0)), width=3)
             self.image = pg.transform.scale(self.image, (16, 24))
         else:
-            pg.draw.polygon(self.image, self.color, ((7, 0), (13, 14), (7, 11), (1, 14), (7, 0)))
+            pg.draw.polygon(self.image, self.color,
+                            ((7, 0), (13, 14), (7, 11), (1, 14), (7, 0)))
         self.bSize = 22 if isFish else 17
         self.orig_image = pg.transform.rotate(self.image.copy(), -90)
         self.dir = pg.Vector2(1, 0)  # sets up forward direction
         maxW, maxH = self.drawSurf.get_size()
-        self.rect = self.image.get_rect(center=(randint(50, maxW - 50), randint(50, maxH - 50)))
+        self.rect = self.image.get_rect(
+            center=(randint(50, maxW - 50), randint(50, maxH - 50)))
         self.ang = randint(0, 360)  # random start angle, & position ^
         self.pos = pg.Vector2(self.rect.center)
         self.grid_lastpos = self.grid.getcell(self.pos)
@@ -71,7 +74,8 @@ class Boid(pg.sprite.Sprite):
             self.grid_lastpos = self.grid_pos
         # get nearby boids and sort by distance
         near_boids = self.grid.getnear(self, self.grid_pos)
-        neiboids = sorted(near_boids, key=lambda i: pg.Vector2(i.rect.center).distance_to(selfCenter))
+        neiboids = sorted(near_boids, key=lambda i: pg.Vector2(
+            i.rect.center).distance_to(selfCenter))
         del neiboids[7:]  # keep 7 closest, dump the rest
         # check when boid has neighborS (also sets ncount with walrus :=)
         if (ncount := len(neiboids)) > 1:
@@ -109,18 +113,22 @@ class Boid(pg.sprite.Sprite):
                 tAngle = 90
             elif sc_y > maxH - margin:
                 tAngle = 270
-            angleDiff = (tAngle - self.ang) + 180  # increase turnRate to keep boids on screen
+            # increase turnRate to keep boids on screen
+            angleDiff = (tAngle - self.ang) + 180
             turnDir = (angleDiff / 360 - (angleDiff // 360)) * 360 - 180
             edgeDist = min(sc_x, sc_y, maxW - sc_x, maxH - sc_y)
-            turnRate = turnRate + (1 - edgeDist / margin) * (20 - turnRate)  # turnRate=minRate, 20=maxRate
+            # turnRate=minRate, 20=maxRate
+            turnRate = turnRate + (1 - edgeDist / margin) * (20 - turnRate)
         if turnDir != 0:  # steers based on turnDir, handles left or right
             self.ang += turnRate * abs(turnDir) / turnDir
         self.ang %= 360  # ensures that the angle stays within 0-360
         # Adjusts angle of boid image to match heading
         self.image = pg.transform.rotate(self.orig_image, -self.ang)
-        self.rect = self.image.get_rect(center=self.rect.center)  # recentering fix
+        self.rect = self.image.get_rect(
+            center=self.rect.center)  # recentering fix
         self.dir = pg.Vector2(1, 0).rotate(self.ang).normalize()
-        self.pos += self.dir * dt * (speed + (7 - ncount) * 5)  # movement speed
+        self.pos += self.dir * dt * \
+            (speed + (7 - ncount) * 5)  # movement speed
         # Optional screen wrap
         if ejWrap and not self.drawSurf.get_rect().contains(self.rect):
             if self.rect.bottom < 0:
@@ -178,10 +186,12 @@ def main():
     # setup fullscreen or window mode
     if FLLSCRN:
         currentRez = (pg.display.Info().current_w, pg.display.Info().current_h)
-        screen = pg.display.set_mode(currentRez, pg.SCALED | pg.NOFRAME | pg.FULLSCREEN, vsync=1)
+        screen = pg.display.set_mode(
+            currentRez, pg.SCALED | pg.NOFRAME | pg.FULLSCREEN, vsync=1)
         pg.mouse.set_visible(False)
     else:
-        screen = pg.display.set_mode((WIDTH, HEIGHT), pg.RESIZABLE | pg.SCALED, vsync=1)
+        screen = pg.display.set_mode(
+            (WIDTH, HEIGHT), pg.RESIZABLE | pg.SCALED, vsync=1)
 
     boidTracker = BoidGrid()
     nBoids = pg.sprite.Group()
@@ -193,7 +203,7 @@ def main():
         font = pg.font.Font(None, 30)
     clock = pg.time.Clock()
 
-    hands=mphands.Hands()
+    hands = mphands.Hands()
 
     # main loop
     while True:
@@ -205,10 +215,9 @@ def main():
             ):
                 return
 
-        data,image = cap.read()
+        data, image = cap.read()
         image = imutils.resize(image, width=WIDTH)
         results = hands.process(image)
-
 
         imageHands = numpy.zeros(image.shape, dtype=numpy.uint8)
         imageHands[:] = BGCOLOR
@@ -216,28 +225,28 @@ def main():
         if results.multi_hand_landmarks:
             for hand_landmarks in results.multi_hand_landmarks:
                 mp_drawing.draw_landmarks(
-                    imageHands,                    
+                    imageHands,
                     hand_landmarks, mphands.HAND_CONNECTIONS
                 )
 
         dt = clock.tick(FPS) / 1000
-        screen.fill(BGCOLOR)        
+        screen.fill(BGCOLOR)
 
         image = imageHands
 
-        imageBackGround = cv2.cvtColor(image,cv2.COLOR_BGR2RGB)
-        imageBackGround=numpy.rot90(imageBackGround)
-        imageBackGround=pg.surfarray.make_surface(imageBackGround)
+        imageBackGround = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        imageBackGround = numpy.rot90(imageBackGround)
+        imageBackGround = pg.surfarray.make_surface(imageBackGround)
 
         screen.blit(imageBackGround, (0, 0))
-
 
         # update boid logic, then draw them
         nBoids.update(dt, SPEED, WRAP)
         nBoids.draw(screen)
         # if true, displays the fps in the upper left corner, for debugging
         if SHOWFPS:
-            screen.blit(font.render(str(int(clock.get_fps())), True, [0, 200, 0]), (8, 8))
+            screen.blit(font.render(str(int(clock.get_fps())),
+                        True, [0, 200, 0]), (8, 8))
 
         pg.display.update()
 
