@@ -2,6 +2,10 @@
 from math import pi, sin, cos, atan2, radians, degrees
 from random import randint
 import pygame as pg
+import cv2
+import mediapipe as mp
+import numpy
+import imutils
 
 '''
 PyNBoids - a Boids simulation - github.com/Nikorasu/PyNBoids
@@ -9,7 +13,7 @@ This version uses a spatial partitioning grid to improve performance.
 Copyright (c) 2021  Nikolaus Stromberg  nikorasu85@gmail.com
 '''
 FLLSCRN = False          # True for Fullscreen, or False for Window
-BOIDZ = 200             # How many boids to spawn, too many may slow fps
+BOIDZ = 100             # How many boids to spawn, too many may slow fps
 WRAP = False            # False avoids edges, True wraps to other side
 FISH = False            # True to turn boids into fish
 SPEED = 150             # Movement speed
@@ -17,7 +21,14 @@ WIDTH = 1200            # Window Width (1200)
 HEIGHT = 800            # Window Height (800)
 BGCOLOR = (0, 0, 0)     # Background color in RGB
 FPS = 60                # 30-90
-SHOWFPS = False         # frame rate debug
+SHOWFPS = True         # frame rate debug
+
+mp_drawing = mp.solutions.drawing_utils
+mp_drawing_styles = mp.solutions.drawing_styles
+
+cap = cv2.VideoCapture(0)
+mphands = mp.solutions.hands
+
 
 
 class Boid(pg.sprite.Sprite):
@@ -182,14 +193,45 @@ def main():
         font = pg.font.Font(None, 30)
     clock = pg.time.Clock()
 
+    hands=mphands.Hands()
+
     # main loop
     while True:
         for e in pg.event.get():
-            if e.type == pg.QUIT or e.type == pg.KEYDOWN and (e.key == pg.K_ESCAPE or e.key == pg.K_q or e.key == pg.K_SPACE):
+            if (
+                e.type == pg.QUIT
+                or e.type == pg.KEYDOWN
+                and e.key in [pg.K_ESCAPE, pg.K_q, pg.K_SPACE]
+            ):
                 return
 
+        data,image = cap.read()
+        image = imutils.resize(image, width=WIDTH)
+        results = hands.process(image)
+
+
+        imageHands = numpy.zeros(image.shape, dtype=numpy.uint8)
+        imageHands[:] = BGCOLOR
+
+        if results.multi_hand_landmarks:
+            for hand_landmarks in results.multi_hand_landmarks:
+                mp_drawing.draw_landmarks(
+                    imageHands,                    
+                    hand_landmarks, mphands.HAND_CONNECTIONS
+                )
+
         dt = clock.tick(FPS) / 1000
-        screen.fill(BGCOLOR)
+        screen.fill(BGCOLOR)        
+
+        image = imageHands
+
+        imageBackGround = cv2.cvtColor(image,cv2.COLOR_BGR2RGB)
+        imageBackGround=numpy.rot90(imageBackGround)
+        imageBackGround=pg.surfarray.make_surface(imageBackGround)
+
+        screen.blit(imageBackGround, (0, 0))
+
+
         # update boid logic, then draw them
         nBoids.update(dt, SPEED, WRAP)
         nBoids.draw(screen)
